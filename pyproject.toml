@@ -1,0 +1,50 @@
+[project]
+name = "lrh-m365-setup"
+version = "0.1.0"
+description = "One installer for the local Microsoft 365 connectors, with the shared sign-in built in."
+readme = "README.md"
+license = "LicenseRef-PolyForm-Internal-Use-1.0.0"
+license-files = ["LICENSE.md"]
+requires-python = ">=3.12"
+dependencies = [
+    "lrh-m365-auth",
+    "starlette>=0.48",
+    "uvicorn>=0.31",
+    "tomlkit>=0.13,<1",
+]
+
+[project.scripts]
+lrh-m365-setup = "m365_setup.__main__:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27,<1",
+    "pytest>=8",
+    "ruff>=0.8",
+    "pyright>=1.1.400",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/m365_setup"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pyright]
+include = ["src"]
+
+[tool.uv.sources]
+# Needs DeviceCodePrompt from feat/device-code-prompt; move back to main once that branch merges.
+lrh-m365-auth = { git = "https://github.com/lucasrhode95/lrh-m365-auth.git", branch = "feat/device-code-prompt" }

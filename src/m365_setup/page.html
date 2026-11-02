@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microsoft 365 connectors setup</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5d6676; --line:#dfe3ea; --accent:#2557d6;
+          --ok:#1f7a4d; --bad:#b3261e; --warn:#8a5a00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#30353f; --accent:#7aa2ff;
+            --ok:#5cc58f; --bad:#ff8a80; --warn:#f0c060; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 10px; }
+  .lead { color:var(--muted); margin:0 0 20px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin:0 0 14px; }
+  ul.rows { list-style:none; margin:0; padding:0; }
+  ul.rows li { display:flex; gap:10px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--line); }
+  ul.rows li:first-child { border-top:0; }
+  .badge { flex:0 0 92px; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); padding-top:2px; }
+  .badge.s-done { color:var(--ok); } .badge.s-failed { color:var(--bad); } .badge.s-working, .badge.s-code { color:var(--accent); }
+  .name { flex:1; min-width:0; }
+  .detail { color:var(--muted); font-size:13px; overflow-wrap:anywhere; }
+  .warn { color:var(--warn); font-size:13px; }
+  .error { color:var(--bad); font-size:13px; overflow-wrap:anywhere; }
+  label.client { display:flex; gap:10px; padding:6px 0; }
+  label.client.off { color:var(--muted); }
+  button { font:inherit; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:8px 14px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .code-card { border:2px solid var(--accent); }
+  .code { font:600 30px/1.2 Consolas, monospace; letter-spacing:.12em; margin:6px 0 12px; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 12px; }
+  ol.steps { margin:0; padding-left:20px; }
+  .hint { color:var(--muted); font-size:13px; margin:10px 0 0; }
+  .hidden { display:none; }
+  .message { font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Microsoft 365 connectors setup</h1>
+  <p class="lead">This page installs the Outlook, Teams and SharePoint connectors, adds them to your AI apps,
+    and signs you in to Microsoft 365. Keep the setup window open until this page says you are done.</p>
+
+  <section id="choose">
+    <h2>1. Pick your AI apps</h2>
+    <div id="client-choices"></div>
+    <label class="client"><input type="checkbox" id="install" checked> Install or update the connectors</label>
+    <p class="hint">Each settings file is backed up before it changes. Apps marked "not found" are not on this computer.</p>
+    <div class="actions"><button class="primary" id="start">Start setup</button></div>
+  </section>
+
+  <section>
+    <h2>2. Connectors</h2>
+    <ul class="rows" id="connectors"></ul>
+  </section>
+
+  <section>
+    <h2>3. AI apps</h2>
+    <ul class="rows" id="clients"></ul>
+  </section>
+
+  <section id="code-card" class="code-card hidden">
+    <h2>Approve sign-in: <span id="code-app"></span></h2>
+    <div class="code" id="code"></div>
+    <div class="actions">
+      <button class="primary" id="copy">Copy code</button>
+      <button id="open">Open Microsoft sign-in</button>
+    </div>
+    <ol class="steps">
+      <li>Click <b>Copy code</b>, then <b>Open Microsoft sign-in</b>. A new tab opens.</li>
+      <li>Paste the code and click <b>Next</b>.</li>
+      <li>Pick your work account.</li>
+      <li>Microsoft asks if you are trying to sign in to <b id="code-app-2"></b>. Click <b>Continue</b>.
+        The connectors use that Microsoft app's sign-in.</li>
+      <li>Come back to this page. The next step starts by itself.</li>
+    </ol>
+    <p class="hint">You may be asked up to three times, once per Microsoft app. The code expires
+      <span id="expires"></span>. Only enter a code shown on this page, never one someone sends you.</p>
+  </section>
+
+  <section>
+    <h2>4. Microsoft 365 sign-in</h2>
+    <ul class="rows" id="profiles"></ul>
+  </section>
+
+  <section>
+    <p class="message" id="message">Pick your AI apps, then click Start setup.</p>
+    <div class="actions">
+      <button id="retry" class="hidden">Try again</button>
+      <button id="close">Close setup</button>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+const token = new URLSearchParams(location.search).get("token") || "";
+history.replaceState(null, "", "/");  // keep the token out of history and screenshots
+const headers = { "x-setup-token": token, "content-type": "application/json" };
+const LABELS = { waiting: "Waiting", working: "Working", done: "Done", failed: "Failed", code: "Your turn", skipped: "Skipped" };
+let current = null, choicesDrawn = false;
+
+function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; }
+
+function rows(id, items, describe) {
+  const list = document.getElementById(id);
+  list.replaceChildren(...items.map(item => {
+    const li = el("li");
+    li.append(el("span", "badge s-" + item.state, LABELS[item.state] || item.state));
+    const name = el("div", "name");
+    describe(item, name);
+    li.append(name);
+    return li;
+  }));
+}
+
+function drawChoices(clients) {
+  const box = document.getElementById("client-choices");
+  box.replaceChildren(...clients.map(c => {
+    const label = el("label", "client" + (c.detected ? "" : " off"));
+    const box = el("input"); box.type = "checkbox"; box.value = c.key; box.checked = c.detected; box.disabled = !c.detected;
+    label.append(box, document.createTextNode(c.title + (c.detected ? "" : " (not found)")));
+    return label;
+  }));
+  choicesDrawn = true;
+}
+
+function draw(s) {
+  current = s;
+  if (!choicesDrawn) drawChoices(s.clients);
+  const idle = s.phase === "choose" || s.phase === "failed" || s.phase === "done";
+  document.getElementById("start").disabled = !idle;
+  document.getElementById("retry").classList.toggle("hidden", s.phase !== "failed");
+  document.getElementById("message").textContent = s.message || "Pick your AI apps, then click Start setup.";
+
+  rows("connectors", s.connectors, (c, n) => { n.append(el("div", "", c.title)); if (c.detail) n.append(el("div", c.state === "failed" ? "error" : "detail", c.detail)); });
+  rows("clients", s.clients.filter(c => c.state !== "waiting" || c.detected), (c, n) => {
+    n.append(el("div", "", c.title));
+    n.append(el("div", c.state === "failed" ? "error" : "detail", c.detail || c.config));
+    if (c.backup) n.append(el("div", "detail", "Backup: " + c.backup));
+    if (c.duplicates && c.duplicates.length) n.append(el("div", "warn", "Also set up under another name, which may show the tools twice: " + c.duplicates.join(", ") + ". Remove those entries if you no longer use them."));
+  });
+  rows("profiles", s.profiles, (p, n) => { n.append(el("div", "", p.app + " (" + p.key + ")")); if (p.detail) n.append(el("div", "error", p.detail)); });
+
+  const card = document.getElementById("code-card");
+  card.classList.toggle("hidden", !s.prompt);
+  if (s.prompt) {
+    document.getElementById("code").textContent = s.prompt.user_code;
+    document.getElementById("code-app").textContent = s.prompt.app;
+    document.getElementById("code-app-2").textContent = s.prompt.app;
+    const left = s.prompt.expires_at ? Math.max(0, Math.round((s.prompt.expires_at * 1000 - Date.now()) / 60000)) : null;
+    document.getElementById("expires").textContent = left === null ? "after a few minutes" : "in about " + left + " min";
+  }
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/api/state", { headers, cache: "no-store" });
+    if (r.ok) draw(await r.json());
+  } catch (e) { document.getElementById("message").textContent = "The setup window was closed. Run the installer again to continue."; return; }
+  setTimeout(poll, 1000);
+}
+
+async function start() {
+  const clients = [...document.querySelectorAll("#client-choices input:checked")].map(i => i.value);
+  const installed = current && current.connectors.every(c => c.state === "done");
+  const install = document.getElementById("install").checked && !installed;
+  const r = await fetch("/api/start", { method: "POST", headers, body: JSON.stringify({ clients, install }) });
+  if (!r.ok) document.getElementById("message").textContent = (await r.json()).error || "Could not start.";
+}
+
+document.getElementById("start").onclick = start;
+document.getElementById("retry").onclick = start;
+document.getElementById("copy").onclick = async () => {
+  if (!current || !current.prompt) return;
+  await navigator.clipboard.writeText(current.prompt.user_code);
+  document.getElementById("copy").textContent = "Copied";
+  setTimeout(() => document.getElementById("copy").textContent = "Copy code", 1500);
+};
+document.getElementById("open").onclick = () => {
+  if (current && current.prompt && /^https:\/\/([a-z0-9-]+\.)*(microsoft\.com|microsoftonline\.com)\//i.test(current.prompt.verification_uri))
+    window.open(current.prompt.verification_uri, "_blank", "noopener");
+};
+document.getElementById("close").onclick = async () => {
+  await fetch("/api/quit", { method: "POST", headers }).catch(() => {});
+  document.getElementById("message").textContent = "Setup closed. You can close this tab.";
+};
+poll();
+</script>
+</body>
+</html>
