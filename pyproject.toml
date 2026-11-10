@@ -5,7 +5,7 @@ description = "One installer for the local Microsoft 365 connectors, with the sh
 readme = "README.md"
 license = "LicenseRef-PolyForm-Internal-Use-1.0.0"
 license-files = ["LICENSE.md"]
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "lrh-m365-auth",
     "starlette>=0.48",
