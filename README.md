@@ -69,5 +69,7 @@ uv run lrh-m365-setup            # page
 uv run lrh-m365-setup --no-ui    # console
 ```
 
+Open work is in the [roadmap](docs/roadmap.md).
+
 To try the bootstrap against a local checkout, set `LRH_M365_SETUP_SOURCE` (and `LRH_M365_AUTH_SOURCE`)
 to folder paths before running `install.cmd`.
